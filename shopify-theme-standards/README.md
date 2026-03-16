@@ -1,6 +1,6 @@
 # Shopify Theme Standards
 
-A Claude Code plugin that enforces Shopify theme development standards through skills, commands, and agents. Version 1.0.6.
+A Claude Code plugin that enforces Shopify theme development standards through skills, commands, and agents. Uses artifact-based handshaking for efficient context management across stages. Version 2.0.0.
 
 **Author:** Aditya Pasikanti
 
@@ -28,40 +28,80 @@ Restart Claude Code and type `/shopify-theme-standards:clarify` — if it respon
 
 ```
 /figma (optional) → /clarify → /plan → /build → /assess → /fix (if needed) → /capture
+/research — standalone, use anytime
 ```
+
+Each command writes its output to `.buildspace/artifacts/{feature-name}/`. The next command reads from there. This means:
+- Each stage gets exactly the context it needs from one known place
+- You can pick up work across sessions (artifacts persist on disk)
+- You can review what each stage understood by reading the artifact file
+- You can hand-edit any artifact before the next stage runs
 
 ## Commands
 
-| Command | Description |
-|---|---|
-| `/figma <url>` | Fetch a Figma design and produce a structured Design Context. Does not write code. |
-| `/clarify` | Extract and confirm requirements. Produces a Task Spec. |
-| `/plan` | Research codebase, read all skills, produce a TODO-by-TODO execution plan. |
-| `/build` | Execute plan TODO-by-TODO. Validates each file against skill checklists. |
-| `/assess` | Dispatch two subagents to validate output and review code quality. |
-| `/fix` | Debug workflow: investigate, diagnose, get approval, then fix. |
-| `/capture` | Extract learnings into `patterns-learned.md` for future reference. |
-
-## Skills
-
-Skills auto-load based on file globs. They can also be invoked manually.
-
-| Skill | Auto-loads on | What it enforces |
+| Command | Input Artifact | Output Artifact |
 |---|---|---|
-| `liquid-standards` | `**/*.liquid` | Variable naming, tag style, render vs include, whitespace control, filters, null checks |
-| `css-standards` | `assets/**/*.css` | BEM naming, section scoping, property ordering, responsive breakpoints, CSS variables |
-| `js-standards` | `assets/**/*.js` | Vanilla JS only, defer loading, Web Components, no inline styles/DOM creation |
-| `section-standards` | `sections/**/*.liquid` | File structure (CSS/HTML/JS/Schema), wrapper patterns, block rendering via snippets |
-| `section-schema-standards` | `sections/**/*.liquid` | Schema structure, setting IDs/labels, block conventions, presets |
-| `theme-architecture` | `templates/**/*.json`, `layout/**/*.liquid`, `config/*.json` | File structure, naming conventions, snippet extraction, section independence |
-| `figma-to-code` | Manual only | React+Tailwind to Liquid+CSS translation, Figma layer to schema mapping, responsive patterns |
+| `/figma <url>` | — | `design-context.md` |
+| `/clarify` | `design-context.md` (optional) | `task-spec.md` |
+| `/plan` | `task-spec.md` | `plan.md` |
+| `/build` | `plan.md` | code + `execution-log.md` |
+| `/assess` | `task-spec.md` + `plan.md` + `execution-log.md` | `assessment.md` |
+| `/fix` | `assessment.md` | fixed code |
+| `/capture` | all artifacts | `capture.md` + `.claude/patterns-learned.md` |
+| `/research "topic"` | — | inline results |
+
+## Artifact Structure
+
+```
+.buildspace/
+  artifacts/
+    {feature-name}/
+      design-context.md    ← /figma output
+      task-spec.md         ← /clarify output
+      plan.md              ← /plan output
+      execution-log.md     ← /build output
+      assessment.md        ← /assess output
+      capture.md           ← /capture output
+```
+
+Add `.buildspace/` to your project's `.gitignore` — artifacts are working files, not source code.
+
+## Context Efficiency
+
+This plugin is designed to minimize token usage:
+
+- **Skills are loaded per-file, not per-stage.** `/build` only loads the skill relevant to the file it's currently writing (e.g., `css-standards` when writing a `.css` file), not all 7 skills upfront.
+- **`/plan` does not read skills.** Planning focuses on architecture and file changes. Skills are for the build phase when code is being written.
+- **Artifacts replace conversation history.** Each stage reads a small, structured artifact file instead of re-reading the entire conversation or re-loading all context.
+- **Checklists are in skill files.** Each skill has its checklist at the bottom, so loading a skill gives you both the rules and the validation criteria in one read.
+
+## Skills & Enforcement
+
+Plugin skill descriptions are loaded into Claude's context, and Claude may auto-invoke skills it deems relevant — but this is unreliable for mandatory standards enforcement. Add the following to your project's `CLAUDE.md` to guarantee skills are invoked every time:
+
+```markdown
+## Project Standards — MANDATORY
+
+Coding standards are provided as **plugin skills** from the `shopify-theme-standards` plugin.
+They must be invoked using the **Skill tool** before writing any code.
+
+**Before writing or modifying any file, invoke the relevant skill(s):**
+- **`.liquid` files** → invoke `shopify-theme-standards:liquid-standards`
+- **`.js` files** → invoke `shopify-theme-standards:js-standards`
+- **CSS / Tailwind / styling** → invoke `shopify-theme-standards:css-standards`
+- **Section files** → invoke `shopify-theme-standards:section-standards` and `shopify-theme-standards:section-schema-standards`
+- **New files / architecture decisions** → invoke `shopify-theme-standards:theme-architecture`
+- **Building from Figma designs** → invoke `shopify-theme-standards:figma-to-code`
+
+Do not skip this step. The plugin skills have detailed rules and checklists that must be followed.
+```
 
 ## Agents
 
 | Agent | Role |
 |---|---|
-| `output-validator` | Checks if built features match requirements. Does not review code quality. |
-| `code-reviewer` | Reviews code quality against project standards. Does not validate functionality. |
+| `output-validator` | Reads task-spec artifact. Checks if built features match requirements. Does not review code quality. |
+| `code-reviewer` | Reads execution-log artifact. Loads relevant skills per file. Reviews code quality against standards. Does not validate functionality. |
 
 Both agents are dispatched automatically by the `/assess` command.
 
