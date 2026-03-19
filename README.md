@@ -15,7 +15,7 @@ A skill is a folder containing:
 
 | Skill | Description | Author |
 |-------|-------------|--------|
-| *(coming soon)* | | |
+| [profiler](./skills/profiler/) | Systematic performance profiling for Node.js, Python, and Go — CPU flamegraphs, memory leak detection, bundle analysis, DB query optimization, and load testing | [@nks](https://github.com/nks) |
 
 ## Contributing
 
