@@ -3,15 +3,15 @@
   "owner": {
     "name": "Brijesh Agarwal"
   },
-  "metadata": {
-    "description": "devx ai labs llm plugins",
-    "version": "1.1.0"
-  },
   "plugins": [
     {
       "name": "shopify-theme-standards",
-      "source": "./shopify-theme-standards",
-      "description": "Theme development Workflow"
+      "source": "./plugins/shopify-theme-standards",
+      "description": "Theme development Workflow",
+      "version": "1.0.0",
+      "author": {
+        "name": "Aditya Pasikanti"
+      }
     }
   ]
 }
